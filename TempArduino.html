@@ -1,0 +1,1609 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Passaggi di Stato dell'Acqua, Curva di Riscaldamento &amp; Laboratorio Arduino</title>
+  <style>
+    /* ==========================================================================
+       VARIABILI CSS & RESET (Palette Termodinamica + Elettronica)
+       ========================================================================== */
+    :root {
+      --bg-page: #f0f4f8;
+      --bg-card: #ffffff;
+      --text-main: #1e293b;
+      --text-muted: #64748b;
+      --border-light: #e2e8f0;
+
+      /* Colori degli stati della materia */
+      --color-solid: #38bdf8;       /* Azzurro ghiaccio */
+      --color-solid-dark: #0284c7;
+      --color-fusion: #818cf8;      /* Indaco transizione */
+      --color-liquid: #2563eb;      /* Blu elettrico acqua */
+      --color-boiling: #f59e0b;     /* Ambra ebollizione */
+      --color-gas: #ef4444;         /* Rosso/Arancio vapore */
+      --color-heat: #f97316;        /* Arancio fiamma */
+      --color-arduino: #00979d;     /* Verde acqua ufficiale Arduino */
+
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+      --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+      --radius-lg: 16px;
+      --radius-md: 10px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+      background-color: var(--bg-page);
+      color: var(--text-main);
+      line-height: 1.55;
+      padding: 16px;
+    }
+
+    /* ==========================================================================
+       HEADER DIDATTICO
+       ========================================================================== */
+    header {
+      max-width: 1320px;
+      margin: 0 auto 20px auto;
+      background: var(--bg-card);
+      padding: 18px 24px;
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      border-left: 6px solid var(--color-liquid);
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+
+    header h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    header p {
+      font-size: 0.93rem;
+      color: var(--text-muted);
+    }
+
+    .badge-temp {
+      font-size: 1.35rem;
+      font-weight: 800;
+      padding: 8px 18px;
+      border-radius: 999px;
+      background: #e0f2fe;
+      color: #0369a1;
+      transition: background-color 0.3s, color 0.3s;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ==========================================================================
+       LAYOUT PRINCIPALE (2 Colonne su Desktop, Impilato su Mobile)
+       ========================================================================== */
+    .main-grid {
+      max-width: 1320px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1.15fr;
+      gap: 20px;
+      align-items: start;
+    }
+
+    @media (max-width: 980px) {
+      .main-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .left-column,
+    .right-column {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      box-shadow: var(--shadow-md);
+      border: 1px solid var(--border-light);
+    }
+
+    .card-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      color: #0f172a;
+    }
+
+    /* ==========================================================================
+       COLONNA SINISTRA: SIMULAZIONE PARTICELLARE, TERMOMETRO E CONTROLLI
+       ========================================================================== */
+    .sim-wrapper {
+      display: flex;
+      gap: 16px;
+      align-items: stretch;
+      margin-bottom: 18px;
+    }
+
+    .particle-box-container {
+      flex: 1;
+      position: relative;
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      border: 2px solid #cbd5e1;
+      background: #0f172a;
+      aspect-ratio: 4 / 3;
+      min-height: 250px;
+    }
+
+    canvas#particleCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .burner-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 8px;
+      background: linear-gradient(90deg, #f97316, #ef4444, #f97316);
+      opacity: 0;
+      transition: opacity 0.25s;
+    }
+    .burner-bar.active {
+      opacity: 1;
+      animation: pulseHeat 1s infinite alternate;
+    }
+
+    @keyframes pulseHeat {
+      from { filter: brightness(0.9); }
+      to { filter: brightness(1.35); }
+    }
+
+    /* Termometro Visivo Animato */
+    .thermometer-panel {
+      width: 68px;
+      background: #f8fafc;
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+      padding: 10px 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      user-select: none;
+    }
+
+    .thermo-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    .thermo-track {
+      position: relative;
+      width: 14px;
+      flex: 1;
+      margin: 10px 0;
+      background: #e2e8f0;
+      border-radius: 999px;
+      border: 2px solid #94a3b8;
+      display: flex;
+      align-items: flex-end;
+      overflow: visible;
+    }
+
+    .thermo-fill {
+      width: 100%;
+      height: 14.28%;
+      background: var(--color-solid);
+      border-radius: 999px;
+      transition: background-color 0.2s;
+    }
+
+    .thermo-tick {
+      position: absolute;
+      left: 18px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: #475569;
+      white-space: nowrap;
+      transform: translateY(50%);
+    }
+    .thermo-tick::before {
+      content: "";
+      position: absolute;
+      left: -6px;
+      top: 50%;
+      width: 5px;
+      height: 1.5px;
+      background: #64748b;
+    }
+
+    .thermo-bulb {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--color-solid);
+      border: 2px solid #94a3b8;
+      margin-top: -6px;
+      z-index: 2;
+      transition: background-color 0.2s;
+    }
+
+    /* Controlli Calore / Slider */
+    .controls-section {
+      background: #f8fafc;
+      padding: 16px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-light);
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 10px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #38bdf8 0%, #818cf8 22%, #2563eb 45%, #f59e0b 75%, #ef4444 100%);
+      outline: none;
+      cursor: pointer;
+      margin-bottom: 14px;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 3px solid #0f172a;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+      cursor: grab;
+      transition: transform 0.1s;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:active {
+      transform: scale(1.15);
+      cursor: grabbing;
+    }
+
+    .playback-buttons {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 9px 12px;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .btn-primary {
+      background: #0f172a;
+      color: #ffffff;
+    }
+    .btn-primary:hover { background: #1e293b; }
+
+    .btn-secondary {
+      background: #e2e8f0;
+      color: #1e293b;
+    }
+    .btn-secondary:hover { background: #cbd5e1; }
+
+    .quick-jumps-label {
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .quick-jumps {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .btn-phase {
+      padding: 6px 10px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      border-radius: 6px;
+      border: 1px solid #cbd5e1;
+      background: #ffffff;
+      color: #334155;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-phase:hover {
+      border-color: #0f172a;
+      background: #f1f5f9;
+    }
+
+    .btn-phase.active-phase-btn {
+      background: #0f172a;
+      color: #ffffff;
+      border-color: #0f172a;
+    }
+
+    /* ==========================================================================
+       SEZIONE ELETTRONICA: ARDUINO + SENSORE LM35 + DISPLAY LCD I2C
+       ========================================================================== */
+    .arduino-card {
+      border-top: 5px solid var(--color-arduino);
+    }
+
+    .arduino-canvas-container {
+      width: 100%;
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      border: 1px solid #cbd5e1;
+      background: #1e293b;
+      aspect-ratio: 16 / 9.2;
+      min-height: 230px;
+      margin-bottom: 12px;
+    }
+
+    canvas#arduinoCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .telemetry-strip {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      background: #f8fafc;
+      border: 1px solid var(--border-light);
+      border-radius: 8px;
+      padding: 10px;
+      text-align: center;
+      margin-bottom: 10px;
+    }
+
+    .telemetry-item span {
+      display: block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .telemetry-item strong {
+      font-size: 0.96rem;
+      color: #0f172a;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Dettaglio Codice Arduino espandibile */
+    details.code-drawer {
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 0.85rem;
+    }
+
+    details.code-drawer summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: #38bdf8;
+      user-select: none;
+    }
+
+    details.code-drawer pre {
+      margin-top: 10px;
+      overflow-x: auto;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 0.78rem;
+      line-height: 1.45;
+      color: #cbd5e1;
+    }
+
+    /* ==========================================================================
+       COLONNA DESTRA: GRAFICO CURVA DI RISCALDAMENTO & BOX DIDATTICO
+       ========================================================================== */
+    .chart-container {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 10;
+      min-height: 270px;
+    }
+
+    canvas#curveCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .didactic-box {
+      border-left: 6px solid var(--color-solid);
+      transition: border-color 0.3s ease;
+    }
+
+    .phase-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .phase-pill {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      background: #e0f2fe;
+      color: #0369a1;
+    }
+
+    .temp-behavior {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: #475569;
+    }
+
+    .didactic-title {
+      font-size: 1.18rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #0f172a;
+    }
+
+    .didactic-text {
+      font-size: 0.96rem;
+      color: #334155;
+      margin-bottom: 12px;
+    }
+
+    .latent-callout {
+      display: none;
+      background: #fffbeb;
+      border: 1px solid #fcd34d;
+      border-left: 4px solid #f59e0b;
+      padding: 12px 14px;
+      border-radius: 8px;
+      font-size: 0.92rem;
+      color: #78350f;
+    }
+
+    .latent-callout.visible {
+      display: block;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- INTESTAZIONE -->
+  <header>
+    <div>
+      <h1>Passaggi di Stato dell'Acqua, Curva di Riscaldamento &amp; Misura con Arduino</h1>
+      <p>Laboratorio integrato di Scienze ed Elettronica: dalle molecole H₂O al sensore LM35 con display LCD I2C</p>
+    </div>
+    <div id="headerTempBadge" class="badge-temp">-20.0 °C</div>
+  </header>
+
+  <!-- CONTENUTO PRINCIPALE -->
+  <main class="main-grid">
+
+    <!-- COLONNA SINISTRA: SIMULATORE MICROSCOPICO + CONTROLLI + BANCO ARDUINO -->
+    <div class="left-column">
+
+      <!-- Card 1: Vista Microscopica e Controlli -->
+      <section class="card">
+        <div class="card-title">
+          <span>🔬 Vista Microscopica (Molecole H₂O)</span>
+          <span id="stateLabelMini" style="font-size: 0.85rem; color: #0284c7;">Stato Solido</span>
+        </div>
+
+        <div class="sim-wrapper">
+          <div class="particle-box-container">
+            <canvas id="particleCanvas"></canvas>
+            <div id="burnerBar" class="burner-bar" title="Fornello attivo: cessione di calore"></div>
+          </div>
+
+          <div class="thermometer-panel" aria-label="Termometro">
+            <span class="thermo-label">120°C</span>
+            <div class="thermo-track">
+              <div class="thermo-tick" style="bottom: 85.7%;">100°</div>
+              <div class="thermo-tick" style="bottom: 14.3%;">0°</div>
+              <div id="thermoFill" class="thermo-fill"></div>
+            </div>
+            <div id="thermoBulb" class="thermo-bulb"></div>
+            <span class="thermo-label" style="margin-top: 4px;">-20°C</span>
+          </div>
+        </div>
+
+        <div class="controls-section">
+          <div class="slider-header">
+            <span>🔥 Calore fornito / Tempo (Q)</span>
+            <span id="heatPercentLabel">0%</span>
+          </div>
+
+          <input type="range" id="heatSlider" min="0" max="100" step="0.1" value="0" aria-label="Calore fornito" />
+
+          <div class="playback-buttons">
+            <button id="btnPlayPause" class="btn btn-primary">▶ Avvia Riscaldamento</button>
+            <button id="btnReset" class="btn btn-secondary">↺ Reset</button>
+          </div>
+
+          <div class="quick-jumps-label">Salta direttamente a una fase:</div>
+          <div class="quick-jumps" id="quickJumpsContainer">
+            <button class="btn-phase active-phase-btn" data-q="5">1. Ghiaccio (-10°C)</button>
+            <button class="btn-phase" data-q="20">2. Fusione (0°C)</button>
+            <button class="btn-phase" data-q="45">3. Acqua Liquida (50°C)</button>
+            <button class="btn-phase" data-q="72">4. Ebollizione (100°C)</button>
+            <button class="btn-phase" data-q="94">5. Vapore (112°C)</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Card 2: Laboratorio Elettronica Arduino + LM35 + Display I2C -->
+      <section class="card arduino-card">
+        <div class="card-title">
+          <span>🔌 Stazione di Misura Arduino UNO + LM35 + LCD I2C</span>
+          <span style="font-size: 0.78rem; color: #00979d; font-weight: 700;">Bus I2C (0x27) • Pin A0</span>
+        </div>
+
+        <div class="arduino-canvas-container">
+          <canvas id="arduinoCanvas"></canvas>
+        </div>
+
+        <!-- Telemetria elettrica in tempo reale del sensore LM35 -->
+        <div class="telemetry-strip">
+          <div class="telemetry-item">
+            <span>Tensione V<sub>OUT</sub> LM35</span>
+            <strong id="lm35VoltageLabel">-200 mV</strong>
+          </div>
+          <div class="telemetry-item">
+            <span>Valore ADC (0-1023)</span>
+            <strong id="lm35AdcLabel">0 (Clamp 0V)</strong>
+          </div>
+          <div class="telemetry-item">
+            <span>Sensibilità Sensore</span>
+            <strong>10.0 mV / °C</strong>
+          </div>
+        </div>
+
+        <details class="code-drawer">
+          <summary>💻 Mostra sketch Arduino C++ (LM35 + LiquidCrystal_I2C)</summary>
+          <pre><code>#include &lt;Wire.h&gt;
+#include &lt;LiquidCrystal_I2C.h&gt;
+
+// Display LCD 16x2 su bus I2C (indirizzo standard 0x27)
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+const int PIN_LM35 = A0; // Uscita analogica LM35 (10 mV/°C)
+
+void setup() {
+  lcd.init();
+  lcd.backlight();
+}
+
+void loop() {
+  int valoreADC = analogRead(PIN_LM35);
+  // Conversione ADC 10-bit (5V = 5000 mV) -> Temperatura in °C
+  float tensione_mV = (valoreADC / 1023.0) * 5000.0;
+  float tempC = tensione_mV / 10.0;
+
+  lcd.setCursor(0, 0);
+  lcd.print("Temp: ");
+  lcd.print(tempC, 1);
+  lcd.print(" C   ");
+
+  lcd.setCursor(0, 1);
+  if (tempC &lt; 0.0)        lcd.print("STATO: SOLIDO   ");
+  else if (tempC == 0.0)  lcd.print("FASE: FUSIONE   ");
+  else if (tempC &lt; 100.0) lcd.print("STATO: LIQUIDO  ");
+  else if (tempC == 100.0)lcd.print("FASE:EBOLLIZIONE");
+  else                    lcd.print("STATO: AERIFORME");
+
+  delay(250);
+}</code></pre>
+        </details>
+      </section>
+
+    </div>
+
+    <!-- COLONNA DESTRA: GRAFICO CURVA DI RISCALDAMENTO + SPIEGAZIONE -->
+    <div class="right-column">
+
+      <!-- Grafico Dinamico -->
+      <section class="card">
+        <div class="card-title">
+          <span>📈 Curva di Riscaldamento dell'Acqua (1 atm)</span>
+          <span style="font-size: 0.8rem; color: var(--text-muted);">Temperatura vs Calore (Q)</span>
+        </div>
+        <div class="chart-container">
+          <canvas id="curveCanvas"></canvas>
+        </div>
+      </section>
+
+      <!-- Box Didattico Contestuale -->
+      <section id="didacticBox" class="card didactic-box">
+        <div class="phase-header">
+          <span id="phasePill" class="phase-pill">Tratto 1 • Stato Solido</span>
+          <span id="tempBehavior" class="temp-behavior">📈 Temperatura in aumento</span>
+        </div>
+        <h2 id="didacticTitle" class="didactic-title">Cosa sta succedendo? Riscaldamento del ghiaccio</h2>
+        <p id="didacticText" class="didactic-text">
+          Sotto lo zero, l'acqua si trova allo stato <strong>solido</strong>. Le molecole sono strettamente legate tra loro in una struttura ordinata (reticolo cristallino) e possono soltanto <strong>vibrare sul posto</strong>. Fornendo calore, la temperatura sale e le molecole vibrano sempre più velocemente.
+        </p>
+        <div id="latentCallout" class="latent-callout">
+          <strong>💡 Concetto Chiave — Calore Latente e Sosta Termica:</strong><br />
+          Anche se il fornello continua a fornire energia, <strong>la temperatura resta ferma</strong>! Tutto questo calore (detto <em>calore latente</em>) non serve ad agitare più velocemente le molecole, ma viene usato come "energia di rottura" per spezzare i legami che le tengono unite.
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <script>
+    /**
+     * ============================================================================
+     * MODELLO FISICO-DIDATTICO DELLA CURVA DI RISCALDAMENTO DELL'ACQUA
+     * ============================================================================
+     */
+    const SEGMENTS = [
+      { id: 1, qStart: 0,  qEnd: 12,  tStart: -20, tEnd: 0,   name: "Riscaldamento del ghiaccio", lcdLine2: "STATO: SOLIDO",    isLatent: false },
+      { id: 2, qStart: 12, qEnd: 28,  tStart: 0,   tEnd: 0,   name: "Fusione (Sosta termica 1)",  lcdLine2: "FASE: FUSIONE",    isLatent: true  },
+      { id: 3, qStart: 28, qEnd: 60,  tStart: 0,   tEnd: 100, name: "Riscaldamento dell'acqua",   lcdLine2: "STATO: LIQUIDO",   isLatent: false },
+      { id: 4, qStart: 60, qEnd: 88,  tStart: 100, tEnd: 100, name: "Ebollizione (Sosta termica 2)",lcdLine2: "FASE:EBOLLIZIONE", isLatent: true  },
+      { id: 5, qStart: 88, qEnd: 100, tStart: 100, tEnd: 120, name: "Riscaldamento del vapore",   lcdLine2: "STATO: AERIFORME", isLatent: false }
+    ];
+
+    const state = {
+      q: 0,
+      isPlaying: false,
+      lastTimestamp: 0,
+      speed: 6.5
+    };
+
+    // Riferimenti DOM
+    const heatSlider = document.getElementById('heatSlider');
+    const heatPercentLabel = document.getElementById('heatPercentLabel');
+    const headerTempBadge = document.getElementById('headerTempBadge');
+    const stateLabelMini = document.getElementById('stateLabelMini');
+    const btnPlayPause = document.getElementById('btnPlayPause');
+    const btnReset = document.getElementById('btnReset');
+    const burnerBar = document.getElementById('burnerBar');
+    const thermoFill = document.getElementById('thermoFill');
+    const thermoBulb = document.getElementById('thermoBulb');
+    const quickJumpButtons = document.querySelectorAll('.btn-phase');
+
+    // Telemetria LM35 DOM
+    const lm35VoltageLabel = document.getElementById('lm35VoltageLabel');
+    const lm35AdcLabel = document.getElementById('lm35AdcLabel');
+
+    // Box didattico DOM
+    const didacticBox = document.getElementById('didacticBox');
+    const phasePill = document.getElementById('phasePill');
+    const tempBehavior = document.getElementById('tempBehavior');
+    const didacticTitle = document.getElementById('didacticTitle');
+    const didacticText = document.getElementById('didacticText');
+    const latentCallout = document.getElementById('latentCallout');
+
+    // Canvas
+    const curveCanvas = document.getElementById('curveCanvas');
+    const curveCtx = curveCanvas.getContext('2d');
+    const particleCanvas = document.getElementById('particleCanvas');
+    const particleCtx = particleCanvas.getContext('2d');
+    const arduinoCanvas = document.getElementById('arduinoCanvas');
+    const arduinoCtx = arduinoCanvas.getContext('2d');
+
+    function evaluateState(q) {
+      const clampedQ = Math.max(0, Math.min(100, q));
+      let seg = SEGMENTS[SEGMENTS.length - 1];
+
+      for (let i = 0; i < SEGMENTS.length; i++) {
+        if (clampedQ >= SEGMENTS[i].qStart && clampedQ <= SEGMENTS[i].qEnd) {
+          seg = SEGMENTS[i];
+          break;
+        }
+      }
+
+      const ratio = (clampedQ - seg.qStart) / (seg.qEnd - seg.qStart);
+      const temp = seg.tStart + ratio * (seg.tEnd - seg.tStart);
+
+      return {
+        q: clampedQ,
+        temp: temp,
+        segment: seg,
+        ratio: ratio
+      };
+    }
+
+    /**
+     * ============================================================================
+     * SIMULATORE MICROSCOPICO (36 Molecole H₂O)
+     * ============================================================================
+     */
+    const NUM_MOLECULES = 36;
+    const COLS = 6;
+    const ROWS = 6;
+    const molecules = [];
+
+    function initMolecules() {
+      molecules.length = 0;
+      for (let i = 0; i < NUM_MOLECULES; i++) {
+        const col = i % COLS;
+        const row = Math.floor(i / COLS);
+        molecules.push({
+          id: i,
+          gridCol: col,
+          gridRow: row,
+          x: 0.25 + col * 0.1,
+          y: 0.55 + row * 0.065,
+          vx: (Math.random() - 0.5) * 0.4,
+          vy: (Math.random() - 0.5) * 0.4,
+          phaseOffset: Math.random() * Math.PI * 2,
+          meltThreshold: ((i * 7 + 3) % NUM_MOLECULES) / NUM_MOLECULES,
+          boilThreshold: ((i * 11 + 5) % NUM_MOLECULES) / NUM_MOLECULES
+        });
+      }
+    }
+
+    function updateAndDrawParticles(dt, simState) {
+      const rect = particleCanvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      if (particleCanvas.width !== Math.round(rect.width * dpr) || particleCanvas.height !== Math.round(rect.height * dpr)) {
+        particleCanvas.width = Math.round(rect.width * dpr);
+        particleCanvas.height = Math.round(rect.height * dpr);
+      }
+
+      const W = particleCanvas.width;
+      const H = particleCanvas.height;
+      const ctx = particleCtx;
+
+      ctx.clearRect(0, 0, W, H);
+
+      const segId = simState.segment.id;
+      const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+      if (segId === 1) {
+        bgGrad.addColorStop(0, '#0c192c');
+        bgGrad.addColorStop(1, '#162c49');
+      } else if (segId === 2 || segId === 3) {
+        bgGrad.addColorStop(0, '#0f172a');
+        bgGrad.addColorStop(1, '#172554');
+      } else {
+        bgGrad.addColorStop(0, '#1e1b2e');
+        bgGrad.addColorStop(1, '#2d1818');
+      }
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, W, H);
+
+      const waterSurfaceY = H * 0.52;
+      if (segId === 2 || segId === 3 || segId === 4) {
+        const liquidFraction = segId === 4 ? (1 - simState.ratio * 0.85) : 1;
+        const currentSurfaceY = H - (H - waterSurfaceY) * liquidFraction;
+
+        ctx.fillStyle = 'rgba(37, 99, 235, 0.14)';
+        ctx.fillRect(0, currentSurfaceY, W, H - currentSurfaceY);
+
+        ctx.strokeStyle = 'rgba(96, 165, 250, 0.35)';
+        ctx.lineWidth = 1.5 * dpr;
+        ctx.beginPath();
+        ctx.moveTo(0, currentSurfaceY);
+        ctx.lineTo(W, currentSurfaceY);
+        ctx.stroke();
+      }
+
+      const radius = Math.max(6, Math.min(W, H) * 0.026);
+      const timeSec = performance.now() * 0.001;
+
+      const latticeStartX = W * 0.26;
+      const latticeStepX = (W * 0.48) / (COLS - 1);
+      const latticeStartY = H * 0.57;
+      const latticeStepY = (H * 0.35) / (ROWS - 1);
+
+      if (segId === 1 || segId === 2) {
+        ctx.strokeStyle = 'rgba(125, 211, 252, 0.28)';
+        ctx.lineWidth = 1.5 * dpr;
+        for (let i = 0; i < molecules.length; i++) {
+          const m1 = molecules[i];
+          const isM1Solid = segId === 1 || (simState.ratio < m1.meltThreshold);
+          if (!isM1Solid) continue;
+
+          if (m1.gridCol < COLS - 1) {
+            const m2 = molecules[i + 1];
+            const isM2Solid = segId === 1 || (simState.ratio < m2.meltThreshold);
+            if (isM2Solid) {
+              ctx.beginPath();
+              ctx.moveTo(m1.px, m1.py);
+              ctx.lineTo(m2.px, m2.py);
+              ctx.stroke();
+            }
+          }
+          if (m1.gridRow < ROWS - 1) {
+            const m3 = molecules[i + COLS];
+            const isM3Solid = segId === 1 || (simState.ratio < m3.meltThreshold);
+            if (isM3Solid) {
+              ctx.beginPath();
+              ctx.moveTo(m1.px, m1.py);
+              ctx.lineTo(m3.px, m3.py);
+              ctx.stroke();
+            }
+          }
+        }
+      }
+
+      for (let i = 0; i < molecules.length; i++) {
+        const m = molecules[i];
+
+        let mode = 'solid';
+        if (segId === 1) {
+          mode = 'solid';
+        } else if (segId === 2) {
+          mode = simState.ratio >= m.meltThreshold ? 'liquid' : 'solid';
+        } else if (segId === 3) {
+          mode = 'liquid';
+        } else if (segId === 4) {
+          mode = simState.ratio >= m.boilThreshold ? 'gas' : 'liquid';
+        } else {
+          mode = 'gas';
+        }
+
+        if (mode === 'solid') {
+          const vibAmp = (2.5 + ((simState.temp + 20) / 20) * 3.5) * dpr;
+          const baseX = latticeStartX + m.gridCol * latticeStepX;
+          const baseY = latticeStartY + m.gridRow * latticeStepY;
+          m.px = baseX + Math.sin(timeSec * 18 + m.phaseOffset) * vibAmp;
+          m.py = baseY + Math.cos(timeSec * 21 + m.phaseOffset * 1.3) * vibAmp;
+          m.x = m.px / W;
+          m.y = m.py / H;
+        } else if (mode === 'liquid') {
+          const tempFactor = Math.max(0.15, simState.temp / 100);
+          const speedMult = (0.18 + tempFactor * 0.55);
+
+          m.vx += (Math.random() - 0.5) * 1.6 * dt;
+          m.vy += (Math.random() - 0.5) * 1.6 * dt + 0.35 * dt;
+
+          const vMag = Math.hypot(m.vx, m.vy) || 1;
+          m.vx = (m.vx / vMag) * speedMult;
+          m.vy = (m.vy / vMag) * speedMult;
+
+          m.x += m.vx * dt;
+          m.y += m.vy * dt;
+
+          const minLiquidY = segId === 4 ? (0.54 + simState.ratio * 0.35) : 0.54;
+          const marginX = radius / W;
+          const marginY = radius / H;
+
+          if (m.x < marginX) { m.x = marginX; m.vx = Math.abs(m.vx); }
+          if (m.x > 1 - marginX) { m.x = 1 - marginX; m.vx = -Math.abs(m.vx); }
+          if (m.y < minLiquidY) { m.y = minLiquidY; m.vy = Math.abs(m.vy); }
+          if (m.y > 1 - marginY) { m.y = 1 - marginY; m.vy = -Math.abs(m.vy); }
+
+          m.px = m.x * W;
+          m.py = m.y * H;
+        } else {
+          const gasBoost = segId === 5 ? (1 + ((simState.temp - 100) / 20) * 0.45) : 1.0;
+          const targetSpeed = 0.85 * gasBoost;
+
+          const vMag = Math.hypot(m.vx, m.vy) || 1;
+          m.vx = (m.vx / vMag) * targetSpeed;
+          m.vy = (m.vy / vMag) * targetSpeed;
+
+          m.x += m.vx * dt;
+          m.y += m.vy * dt;
+
+          const marginX = radius / W;
+          const marginY = radius / H;
+
+          if (m.x < marginX) { m.x = marginX; m.vx = Math.abs(m.vx); }
+          if (m.x > 1 - marginX) { m.x = 1 - marginX; m.vx = -Math.abs(m.vx); }
+          if (m.y < marginY) { m.y = marginY; m.vy = Math.abs(m.vy); }
+          if (m.y > 1 - marginY) { m.y = 1 - marginY; m.vy = -Math.abs(m.vy); }
+
+          m.px = m.x * W;
+          m.py = m.y * H;
+        }
+
+        let fillMain = '#38bdf8';
+        let glowColor = 'rgba(56, 189, 248, 0.4)';
+        if (mode === 'liquid') {
+          fillMain = '#3b82f6';
+          glowColor = 'rgba(59, 130, 246, 0.45)';
+        } else if (mode === 'gas') {
+          fillMain = '#f97316';
+          glowColor = 'rgba(239, 68, 68, 0.5)';
+        }
+
+        ctx.beginPath();
+        ctx.arc(m.px, m.py, radius * 1.35, 0, Math.PI * 2);
+        ctx.fillStyle = glowColor;
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(m.px, m.py, radius, 0, Math.PI * 2);
+        ctx.fillStyle = fillMain;
+        ctx.fill();
+        ctx.lineWidth = 1.2 * dpr;
+        ctx.strokeStyle = '#ffffff';
+        ctx.stroke();
+
+        const angle = mode === 'solid' ? -Math.PI / 2 : (timeSec * 2 + m.id);
+        const hDist = radius * 0.85;
+        const hRad = radius * 0.42;
+
+        [-0.9, 0.9].forEach(offset => {
+          const hx = m.px + Math.cos(angle + offset) * hDist;
+          const hy = m.py + Math.sin(angle + offset) * hDist;
+          ctx.beginPath();
+          ctx.arc(hx, hy, hRad, 0, Math.PI * 2);
+          ctx.fillStyle = '#f8fafc';
+          ctx.fill();
+        });
+      }
+    }
+
+    /**
+     * ============================================================================
+     * SIMULATORE HARDWARE ARDUINO UNO + SENSORE LM35 + DISPLAY LCD 16x2 I2C
+     * ============================================================================
+     */
+    function roundRect(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    function drawArduinoHardware(simState) {
+      const rect = arduinoCanvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      if (arduinoCanvas.width !== Math.round(rect.width * dpr) || arduinoCanvas.height !== Math.round(rect.height * dpr)) {
+        arduinoCanvas.width = Math.round(rect.width * dpr);
+        arduinoCanvas.height = Math.round(rect.height * dpr);
+      }
+
+      const W = arduinoCanvas.width;
+      const H = arduinoCanvas.height;
+      const ctx = arduinoCtx;
+
+      ctx.clearRect(0, 0, W, H);
+
+      // Sfondo banco laboratorio elettronica (tappetino ESD scuro con griglia sottile)
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 0, W, H);
+
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.08)';
+      ctx.lineWidth = 1 * dpr;
+      const gridStep = 22 * dpr;
+      for (let gx = 0; gx < W; gx += gridStep) {
+        ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke();
+      }
+      for (let gy = 0; gy < H; gy += gridStep) {
+        ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke();
+      }
+
+      // --------------------------------------------------------------------------
+      // 1. SENSORE DI TEMPERATURA LM35 (Package TO-92 a sinistra)
+      // --------------------------------------------------------------------------
+      const lmX = W * 0.06;
+      const lmY = H * 0.14;
+      const lmW = W * 0.21;
+      const lmH = H * 0.34;
+
+      const segColors = { 1: '#38bdf8', 2: '#818cf8', 3: '#3b82f6', 4: '#f59e0b', 5: '#ef4444' };
+      const sensorGlow = segColors[simState.segment.id];
+
+      ctx.save();
+      ctx.shadowColor = sensorGlow;
+      ctx.shadowBlur = 16 * dpr;
+      ctx.fillStyle = '#1e293b';
+      roundRect(ctx, lmX, lmY, lmW, lmH, 8 * dpr);
+      ctx.fill();
+      ctx.restore();
+
+      ctx.strokeStyle = sensorGlow;
+      ctx.lineWidth = 2 * dpr;
+      roundRect(ctx, lmX, lmY, lmW, lmH, 8 * dpr);
+      ctx.stroke();
+
+      const bodyW = lmW * 0.56;
+      const bodyH = lmH * 0.44;
+      const bodyX = lmX + (lmW - bodyW) / 2;
+      const bodyY = lmY + lmH * 0.14;
+
+      ctx.fillStyle = '#090d16';
+      roundRect(ctx, bodyX, bodyY, bodyW, bodyH, 4 * dpr);
+      ctx.fill();
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 1.2 * dpr;
+      ctx.stroke();
+
+      ctx.fillStyle = '#f8fafc';
+      ctx.font = `bold ${10 * dpr}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText('LM35DZ', bodyX + bodyW / 2, bodyY + bodyH * 0.45);
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = `${7.5 * dpr}px sans-serif`;
+      ctx.fillText('10mV/°C', bodyX + bodyW / 2, bodyY + bodyH * 0.78);
+
+      const pinOffsets = [0.22, 0.5, 0.78];
+      const pinLabels = ['+5V', 'OUT', 'GND'];
+      const pinColors = ['#ef4444', '#facc15', '#64748b'];
+      const pinCoords = [];
+
+      pinOffsets.forEach((off, idx) => {
+        const px = bodyX + bodyW * off;
+        const pyTop = bodyY + bodyH;
+        const pyBot = lmY + lmH * 0.85;
+        pinCoords.push({ x: px, y: pyBot });
+
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 2.2 * dpr;
+        ctx.beginPath();
+        ctx.moveTo(px, pyTop);
+        ctx.lineTo(px, pyBot);
+        ctx.stroke();
+
+        ctx.fillStyle = pinColors[idx];
+        ctx.font = `bold ${7.5 * dpr}px monospace`;
+        ctx.fillText(pinLabels[idx], px, pyBot + 10 * dpr);
+      });
+
+      // --------------------------------------------------------------------------
+      // 2. SCHEDA ARDUINO UNO R3 (In basso a sinistra/centro)
+      // --------------------------------------------------------------------------
+      const ardX = W * 0.06;
+      const ardY = H * 0.56;
+      const ardW = W * 0.36;
+      const ardH = H * 0.37;
+
+      ctx.fillStyle = '#008184';
+      roundRect(ctx, ardX, ardY, ardW, ardH, 8 * dpr);
+      ctx.fill();
+      ctx.strokeStyle = '#00b4b8';
+      ctx.lineWidth = 1.8 * dpr;
+      ctx.stroke();
+
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fillRect(ardX - 6 * dpr, ardY + ardH * 0.16, 16 * dpr, ardH * 0.28);
+      ctx.strokeStyle = '#475569';
+      ctx.strokeRect(ardX - 6 * dpr, ardY + ardH * 0.16, 16 * dpr, ardH * 0.28);
+
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(ardX + ardW * 0.36, ardY + ardH * 0.44, ardW * 0.48, ardH * 0.22);
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = `${7.5 * dpr}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText('ATMEGA328P-PU', ardX + ardW * 0.6, ardY + ardH * 0.58);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `bold ${10.5 * dpr}px sans-serif`;
+      ctx.textAlign = 'left';
+      ctx.fillText('ARDUINO UNO', ardX + ardW * 0.26, ardY + ardH * 0.28);
+
+      ctx.beginPath();
+      ctx.arc(ardX + ardW * 0.85, ardY + ardH * 0.24, 3.5 * dpr, 0, Math.PI * 2);
+      ctx.fillStyle = '#22c55e';
+      ctx.fill();
+      ctx.fillStyle = '#e2e8f0';
+      ctx.font = `${7 * dpr}px monospace`;
+      ctx.fillText('ON', ardX + ardW * 0.89, ardY + ardH * 0.27);
+
+      const pinA0 = { x: ardX + ardW * 0.46, y: ardY + ardH * 0.88 };
+      const pinSDA = { x: ardX + ardW * 0.72, y: ardY + ardH * 0.88 };
+      const pinSCL = { x: ardX + ardW * 0.84, y: ardY + ardH * 0.88 };
+
+      [
+        { p: pinA0, lbl: 'A0', col: '#facc15' },
+        { p: pinSDA, lbl: 'SDA', col: '#38bdf8' },
+        { p: pinSCL, lbl: 'SCL', col: '#a855f7' }
+      ].forEach(item => {
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(item.p.x - 4 * dpr, item.p.y - 4 * dpr, 8 * dpr, 8 * dpr);
+        ctx.fillStyle = item.col;
+        ctx.font = `bold ${7.5 * dpr}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.fillText(item.lbl, item.p.x, item.p.y - 7 * dpr);
+      });
+
+      // --------------------------------------------------------------------------
+      // 3. DISPLAY LCD 16x2 CON MODULO I2C (A destra, ben leggibile!)
+      // --------------------------------------------------------------------------
+      const lcdX = W * 0.48;
+      const lcdY = H * 0.14;
+      const lcdW = W * 0.47;
+      const lcdH = H * 0.56;
+
+      ctx.fillStyle = '#065f46';
+      roundRect(ctx, lcdX, lcdY, lcdW, lcdH, 10 * dpr);
+      ctx.fill();
+      ctx.strokeStyle = '#10b981';
+      ctx.lineWidth = 2 * dpr;
+      ctx.stroke();
+
+      ctx.fillStyle = '#a7f3d0';
+      ctx.font = `bold ${8.5 * dpr}px monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText('LCD 16x2 • Modulo I2C (PCF8574)', lcdX + 12 * dpr, lcdY + 15 * dpr);
+
+      const bezelX = lcdX + 12 * dpr;
+      const bezelY = lcdY + 22 * dpr;
+      const bezelW = lcdW - 24 * dpr;
+      const bezelH = lcdH - 46 * dpr;
+
+      ctx.fillStyle = '#090d16';
+      roundRect(ctx, bezelX, bezelY, bezelW, bezelH, 6 * dpr);
+      ctx.fill();
+
+      const screenX = bezelX + 8 * dpr;
+      const screenY = bezelY + 8 * dpr;
+      const screenW = bezelW - 16 * dpr;
+      const screenH = bezelH - 16 * dpr;
+
+      const lcdGrad = ctx.createLinearGradient(screenX, screenY, screenX, screenY + screenH);
+      lcdGrad.addColorStop(0, '#0284c7');
+      lcdGrad.addColorStop(1, '#0369a1');
+      ctx.fillStyle = lcdGrad;
+      ctx.fillRect(screenX, screenY, screenW, screenH);
+
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+      ctx.lineWidth = 0.8 * dpr;
+      const cellW = screenW / 16;
+      const cellH = screenH / 2;
+      for (let c = 1; c < 16; c++) {
+        ctx.beginPath();
+        ctx.moveTo(screenX + c * cellW, screenY);
+        ctx.lineTo(screenX + c * cellW, screenY + screenH);
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.moveTo(screenX, screenY + cellH);
+      ctx.lineTo(screenX + screenW, screenY + cellH);
+      ctx.stroke();
+
+      const tempValStr = simState.temp.toFixed(1);
+      const line1 = `Temp: ${tempValStr} C`;
+      const line2 = simState.segment.lcdLine2;
+
+      const fontSize = Math.max(11, Math.min(screenW * 0.072, screenH * 0.34));
+      ctx.fillStyle = '#f0f9ff';
+      ctx.shadowColor = 'rgba(255, 255, 255, 0.65)';
+      ctx.shadowBlur = 4 * dpr;
+      ctx.font = `bold ${fontSize}px 'Consolas', 'Courier New', monospace`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+
+      ctx.fillText(line1, screenX + 8 * dpr, screenY + cellH * 0.52);
+      ctx.fillText(line2, screenX + 8 * dpr, screenY + cellH * 1.52);
+      ctx.shadowBlur = 0;
+
+      const lcdSDA = { x: lcdX + lcdW * 0.35, y: lcdY + lcdH };
+      const lcdSCL = { x: lcdX + lcdW * 0.55, y: lcdY + lcdH };
+      ctx.fillStyle = '#a7f3d0';
+      ctx.font = `bold ${7.5 * dpr}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText('SDA', lcdSDA.x, lcdSDA.y - 7 * dpr);
+      ctx.fillText('SCL', lcdSCL.x, lcdSCL.y - 7 * dpr);
+
+      // --------------------------------------------------------------------------
+      // 4. CABLAGGI / JUMPER WIRES ANIMATI (LM35 -> A0, Bus I2C -> LCD)
+      // --------------------------------------------------------------------------
+      ctx.strokeStyle = '#facc15';
+      ctx.lineWidth = 2.4 * dpr;
+      ctx.beginPath();
+      ctx.moveTo(pinCoords[1].x, pinCoords[1].y);
+      ctx.bezierCurveTo(
+        pinCoords[1].x, ardY - 12 * dpr,
+        pinA0.x, ardY - 12 * dpr,
+        pinA0.x, pinA0.y
+      );
+      ctx.stroke();
+
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2.4 * dpr;
+      ctx.beginPath();
+      ctx.moveTo(pinSDA.x, pinSDA.y);
+      ctx.bezierCurveTo(
+        pinSDA.x, H * 0.96,
+        lcdSDA.x, H * 0.84,
+        lcdSDA.x, lcdSDA.y
+      );
+      ctx.stroke();
+
+      ctx.strokeStyle = '#a855f7';
+      ctx.lineWidth = 2.4 * dpr;
+      ctx.beginPath();
+      ctx.moveTo(pinSCL.x, pinSCL.y);
+      ctx.bezierCurveTo(
+        pinSCL.x, H * 0.98,
+        lcdSCL.x, H * 0.86,
+        lcdSCL.x, lcdSCL.y
+      );
+      ctx.stroke();
+
+      const pulseT = (performance.now() * 0.0015) % 1;
+      const pulseX = pinSDA.x + (lcdSDA.x - pinSDA.x) * pulseT;
+      const pulseY = (pinSDA.y + lcdSDA.y) * 0.5 + Math.sin(pulseT * Math.PI) * 14 * dpr;
+      ctx.beginPath();
+      ctx.arc(pulseX, pulseY, 3.2 * dpr, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = `${8.5 * dpr}px sans-serif`;
+      ctx.textAlign = 'right';
+      ctx.fillText('Bus I2C: 2 fili dati (SDA/SCL) + 5V/GND', W - 12 * dpr, H - 10 * dpr);
+    }
+
+    /**
+     * ============================================================================
+     * GRAFICO DINAMICO DELLA CURVA DI RISCALDAMENTO (Canvas 2D)
+     * ============================================================================
+     */
+    function drawHeatingCurve(simState) {
+      const rect = curveCanvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      if (curveCanvas.width !== Math.round(rect.width * dpr) || curveCanvas.height !== Math.round(rect.height * dpr)) {
+        curveCanvas.width = Math.round(rect.width * dpr);
+        curveCanvas.height = Math.round(rect.height * dpr);
+      }
+
+      const W = curveCanvas.width;
+      const H = curveCanvas.height;
+      const ctx = curveCtx;
+
+      ctx.clearRect(0, 0, W, H);
+
+      const padLeft = 56 * dpr;
+      const padRight = 24 * dpr;
+      const padTop = 24 * dpr;
+      const padBottom = 42 * dpr;
+
+      const plotW = W - padLeft - padRight;
+      const plotH = H - padTop - padBottom;
+
+      const qToX = (qVal) => padLeft + (qVal / 100) * plotW;
+      const tToY = (tVal) => padTop + plotH - ((tVal - (-20)) / 140) * plotH;
+
+      ctx.font = `${11 * dpr}px system-ui, sans-serif`;
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+
+      const yTicks = [-20, 0, 20, 40, 60, 80, 100, 120];
+      yTicks.forEach(t => {
+        const y = tToY(t);
+        const isCritical = (t === 0 || t === 100);
+
+        ctx.beginPath();
+        ctx.moveTo(padLeft, y);
+        ctx.lineTo(padLeft + plotW, y);
+        if (isCritical) {
+          ctx.setLineDash([5 * dpr, 4 * dpr]);
+          ctx.strokeStyle = t === 0 ? 'rgba(2, 132, 199, 0.45)' : 'rgba(239, 68, 68, 0.45)';
+          ctx.lineWidth = 1.5 * dpr;
+        } else {
+          ctx.setLineDash([]);
+          ctx.strokeStyle = '#e2e8f0';
+          ctx.lineWidth = 1 * dpr;
+        }
+        ctx.stroke();
+
+        ctx.fillStyle = isCritical ? '#0f172a' : '#64748b';
+        ctx.font = isCritical ? `bold ${11.5 * dpr}px system-ui, sans-serif` : `${11 * dpr}px system-ui, sans-serif`;
+        ctx.fillText(`${t}°C`, padLeft - 8 * dpr, y);
+      });
+      ctx.setLineDash([]);
+
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 2 * dpr;
+      ctx.beginPath();
+      ctx.moveTo(padLeft, padTop);
+      ctx.lineTo(padLeft, padTop + plotH);
+      ctx.lineTo(padLeft + plotW, padTop + plotH);
+      ctx.stroke();
+
+      ctx.fillStyle = '#334155';
+      ctx.font = `bold ${12 * dpr}px system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText('Calore fornito (Q) / Tempo di riscaldamento →', padLeft + plotW / 2, H - 14 * dpr);
+
+      const segColors = {
+        1: '#38bdf8',
+        2: '#818cf8',
+        3: '#2563eb',
+        4: '#f59e0b',
+        5: '#ef4444'
+      };
+
+      SEGMENTS.forEach(seg => {
+        const x1 = qToX(seg.qStart);
+        const y1 = tToY(seg.tStart);
+        const x2 = qToX(seg.qEnd);
+        const y2 = tToY(seg.tEnd);
+        const isCurrent = seg.id === simState.segment.id;
+
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.strokeStyle = segColors[seg.id];
+        ctx.lineWidth = (isCurrent ? 6 : 3.5) * dpr;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+
+        const midX = (x1 + x2) / 2;
+        const midY = (y1 + y2) / 2;
+        ctx.font = `bold ${10.5 * dpr}px system-ui, sans-serif`;
+        ctx.fillStyle = isCurrent ? '#0f172a' : '#64748b';
+        ctx.textAlign = 'center';
+
+        if (seg.id === 1) ctx.fillText('Solido', midX - 18 * dpr, midY - 12 * dpr);
+        if (seg.id === 2) ctx.fillText('FUSIONE (0°C)', midX, midY - 14 * dpr);
+        if (seg.id === 3) ctx.fillText('Liquido', midX - 24 * dpr, midY);
+        if (seg.id === 4) ctx.fillText('EBOLLIZIONE (100°C)', midX, midY - 14 * dpr);
+        if (seg.id === 5) ctx.fillText('Vapore', midX - 22 * dpr, midY - 10 * dpr);
+      });
+
+      const curX = qToX(simState.q);
+      const curY = tToY(simState.temp);
+
+      ctx.beginPath();
+      ctx.setLineDash([3 * dpr, 3 * dpr]);
+      ctx.moveTo(curX, curY);
+      ctx.lineTo(curX, padTop + plotH);
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 1.5 * dpr;
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      const activeColor = segColors[simState.segment.id];
+
+      ctx.beginPath();
+      ctx.arc(curX, curY, 12 * dpr, 0, Math.PI * 2);
+      ctx.fillStyle = activeColor + '33';
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(curX, curY, 6.5 * dpr, 0, Math.PI * 2);
+      ctx.fillStyle = activeColor;
+      ctx.fill();
+      ctx.lineWidth = 2.5 * dpr;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+    }
+
+    /**
+     * ============================================================================
+     * AGGIORNAMENTO INTERFACCIA, TELEMETRIA LM35 E BOX DIDATTICO CONTESTUALE
+     * ============================================================================
+     */
+    const DIDACTIC_CONTENT = {
+      1: {
+        pill: "Tratto 1 • Stato Solido (Ghiaccio)",
+        pillBg: "#e0f2fe",
+        pillColor: "#0369a1",
+        borderColor: "#38bdf8",
+        tempBehavior: "📈 Temperatura in aumento (-20°C → 0°C)",
+        title: "Cosa sta succedendo? Riscaldamento del ghiaccio",
+        text: "Sotto gli 0 °C l'acqua è allo stato <strong>solido</strong>. Le molecole H₂O sono bloccate in un reticolo cristallino ordinato e possono soltanto <strong>vibrare attorno alla propria posizione</strong>. Fornendo calore, aumenta la loro energia cinetica (vibrano più forte) e la temperatura sale fino a 0 °C.",
+        showLatent: false
+      },
+      2: {
+        pill: "Tratto 2 • Sosta Termica 1 (Fusione)",
+        pillBg: "#e0e7ff",
+        pillColor: "#4338ca",
+        borderColor: "#818cf8",
+        tempBehavior: "⏸️ Temperatura COSTANTE a 0 °C",
+        title: "Cosa sta succedendo? Coesistenza Solido + Liquido",
+        text: "A <strong>0 °C</strong> inizia la <strong>fusione</strong>: nel contenitore coesistono ghiaccio e acqua liquida. Man mano che si fornisce calore, il reticolo cristallino si disgrega progressivamente e le molecole iniziano a scivolare le une sulle altre.",
+        showLatent: true
+      },
+      3: {
+        pill: "Tratto 3 • Stato Liquido (Acqua)",
+        pillBg: "#dbeafe",
+        pillColor: "#1d4ed8",
+        borderColor: "#2563eb",
+        tempBehavior: "📈 Temperatura in aumento (0°C → 100°C)",
+        title: "Cosa sta succedendo? Riscaldamento dell'acqua liquida",
+        text: "Tutto il ghiaccio si è sciolto: ora abbiamo solo <strong>acqua liquida</strong>. Le molecole restano vicine tra loro ma senza posizioni fisse, scorrendo liberamente sul fondo del recipiente. Il calore fornito fa aumentare nuovamente la temperatura e la velocità di agitazione delle molecole.",
+        showLatent: false
+      },
+      4: {
+        pill: "Tratto 4 • Sosta Termica 2 (Ebollizione)",
+        pillBg: "#fef3c7",
+        pillColor: "#b45309",
+        borderColor: "#f59e0b",
+        tempBehavior: "⏸️ Temperatura COSTANTE a 100 °C",
+        title: "Cosa sta succedendo? Coesistenza Liquido + Aeriforme",
+        text: "A <strong>100 °C</strong> (a pressione atmosferica normale) l'acqua entra in <strong>ebollizione</strong>. Le molecole ricevono energia sufficiente a vincere completamente le forze di attrazione reciproca, staccandosi dal liquido per passare allo stato di <strong>vapore</strong> in tutto il volume.",
+        showLatent: true
+      },
+      5: {
+        pill: "Tratto 5 • Stato Aeriforme (Vapore)",
+        pillBg: "#fee2e2",
+        pillColor: "#b91c1c",
+        borderColor: "#ef4444",
+        tempBehavior: "📈 Temperatura in aumento (100°C → 120°C)",
+        title: "Cosa sta succedendo? Riscaldamento del vapore acqueo",
+        text: "Tutta l'acqua è ormai diventata <strong>gas (vapore acqueo)</strong>. Le molecole sono molto distanziate tra loro e si muovono ad altissima velocità in tutte le direzioni, occupando l'intero spazio disponibile. Continuando a scaldare, la temperatura del vapore aumenta ulteriormente.",
+        showLatent: false
+      }
+    };
+
+    let lastRenderedSegId = null;
+
+    function updateUI(simState) {
+      const formattedTemp = simState.temp.toFixed(1) + " °C";
+      headerTempBadge.textContent = formattedTemp;
+      heatPercentLabel.textContent = Math.round(simState.q) + "%";
+      heatSlider.value = simState.q;
+
+      // Aggiornamento telemetria elettrica LM35 (10 mV / °C)
+      const vOutMv = simState.temp * 10;
+      lm35VoltageLabel.textContent = `${Math.round(vOutMv)} mV`;
+
+      if (vOutMv < 0) {
+        lm35AdcLabel.textContent = `0 (Neg. < 0V)`;
+      } else {
+        const adcVal = Math.round((vOutMv / 5000) * 1023);
+        lm35AdcLabel.textContent = `${adcVal} / 1023`;
+      }
+
+      // Termometro visivo
+      const thermoPct = ((simState.temp - (-20)) / 140) * 100;
+      thermoFill.style.height = `${Math.max(2, Math.min(100, thermoPct))}%`;
+
+      const segId = simState.segment.id;
+      const themeColors = {
+        1: { bg: '#e0f2fe', fg: '#0369a1', bar: '#38bdf8', label: 'Stato Solido' },
+        2: { bg: '#e0e7ff', fg: '#4338ca', bar: '#818cf8', label: 'Fusione (Solido + Liquido)' },
+        3: { bg: '#dbeafe', fg: '#1d4ed8', bar: '#2563eb', label: 'Stato Liquido' },
+        4: { bg: '#fef3c7', fg: '#b45309', bar: '#f59e0b', label: 'Ebollizione (Liquido + Gas)' },
+        5: { bg: '#fee2e2', fg: '#b91c1c', bar: '#ef4444', label: 'Stato Aeriforme (Vapore)' }
+      };
+      const tc = themeColors[segId];
+      headerTempBadge.style.backgroundColor = tc.bg;
+      headerTempBadge.style.color = tc.fg;
+      thermoFill.style.backgroundColor = tc.bar;
+      thermoBulb.style.backgroundColor = tc.bar;
+      stateLabelMini.textContent = tc.label;
+      stateLabelMini.style.color = tc.fg;
+
+      burnerBar.classList.toggle('active', state.isPlaying);
+
+      if (lastRenderedSegId !== segId) {
+        lastRenderedSegId = segId;
+        const info = DIDACTIC_CONTENT[segId];
+
+        didacticBox.style.borderLeftColor = info.borderColor;
+        phasePill.textContent = info.pill;
+        phasePill.style.backgroundColor = info.pillBg;
+        phasePill.style.color = info.pillColor;
+        tempBehavior.textContent = info.tempBehavior;
+        didacticTitle.textContent = info.title;
+        didacticText.innerHTML = info.text;
+
+        if (info.showLatent) {
+          latentCallout.classList.add('visible');
+        } else {
+          latentCallout.classList.remove('visible');
+        }
+
+        quickJumpButtons.forEach((btn, idx) => {
+          btn.classList.toggle('active-phase-btn', idx + 1 === segId);
+        });
+      }
+    }
+
+    /**
+     * ============================================================================
+     * EVENT LISTENERS & LOOP DI ANIMAZIONE (requestAnimationFrame)
+     * ============================================================================
+     */
+    function setPlayState(playing) {
+      state.isPlaying = playing;
+      btnPlayPause.textContent = playing ? "⏸ Pausa" : "▶ Avvia Riscaldamento";
+      if (playing && state.q >= 100) {
+        state.q = 0;
+      }
+    }
+
+    heatSlider.addEventListener('input', (e) => {
+      state.q = parseFloat(e.target.value);
+      if (state.isPlaying) setPlayState(false);
+    });
+
+    btnPlayPause.addEventListener('click', () => {
+      setPlayState(!state.isPlaying);
+    });
+
+    btnReset.addEventListener('click', () => {
+      setPlayState(false);
+      state.q = 0;
+      initMolecules();
+    });
+
+    quickJumpButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        setPlayState(false);
+        state.q = parseFloat(btn.getAttribute('data-q'));
+      });
+    });
+
+    function animationLoop(timestamp) {
+      if (!state.lastTimestamp) state.lastTimestamp = timestamp;
+      const dt = Math.min(0.05, (timestamp - state.lastTimestamp) / 1000);
+      state.lastTimestamp = timestamp;
+
+      if (state.isPlaying) {
+        state.q += state.speed * dt;
+        if (state.q >= 100) {
+          state.q = 100;
+          setPlayState(false);
+        }
+      }
+
+      const simState = evaluateState(state.q);
+      updateUI(simState);
+      updateAndDrawParticles(dt, simState);
+      drawHeatingCurve(simState);
+      drawArduinoHardware(simState);
+
+      requestAnimationFrame(animationLoop);
+    }
+
+    initMolecules();
+    requestAnimationFrame(animationLoop);
+  </script>
+</body>
+</html>
