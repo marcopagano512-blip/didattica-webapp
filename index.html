@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Didattica WebApp - Prof. Marco Pagano</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #222;
+            /* Sfondo a tema "Ufficio di Fantozzi / Megaditta" con velo chiaro per la leggibilità */
+            background-color: #d8d3c8;
+            background-image: 
+                linear-gradient(rgba(244, 240, 230, 0.86), rgba(232, 226, 213, 0.90)),
+                url('https://images.unsplash.com/photo-1505664194779-8beaceb93744?auto=format&fit=crop&w=1600&q=80');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Intestazione con nome docente in alto a destra */
+        header {
+            width: 100%;
+            background-color: rgba(31, 58, 82, 0.95);
+            color: #ffffff;
+            padding: 16px 35px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.25);
+            border-bottom: 3px solid #b59b72;
+        }
+
+        .repo-link {
+            color: #e6dcc8;
+            text-decoration: none;
+            font-size: 0.92em;
+            font-weight: 600;
+            border: 1px solid #e6dcc8;
+            padding: 6px 12px;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+
+        .repo-link:hover {
+            background-color: #e6dcc8;
+            color: #1f3a52;
+        }
+
+        .docente-info {
+            text-align: right;
+            font-size: 1.05em;
+            font-weight: bold;
+            letter-spacing: 0.3px;
+        }
+
+        .docente-info span {
+            display: block;
+            font-size: 0.85em;
+            font-weight: normal;
+            color: #dcd3c1;
+        }
+
+        /* Contenitore principale */
+        main {
+            max-width: 1050px;
+            margin: 35px auto;
+            padding: 0 20px;
+            flex: 1;
+        }
+
+        .hero-box {
+            background-color: rgba(250, 247, 240, 0.95);
+            border: 1px solid #c9bfae;
+            border-left: 6px solid #1f3a52;
+            padding: 25px 30px;
+            border-radius: 6px;
+            margin-bottom: 35px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+
+        .hero-box h1 {
+            margin: 0 0 8px 0;
+            color: #1f3a52;
+            font-family: 'Georgia', serif;
+            font-size: 1.9em;
+        }
+
+        .hero-box p {
+            margin: 0;
+            color: #4a453e;
+            font-size: 1.05em;
+            line-height: 1.5;
+        }
+
+        .citazione-fantozzi {
+            margin-top: 12px;
+            font-style: italic;
+            font-size: 0.92em;
+            color: #6e6353;
+        }
+
+        /* Griglia delle schede App */
+        .app-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+            gap: 30px;
+        }
+
+        .app-card {
+            background-color: #faf7f0;
+            border: 1px solid #c9bfae;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.25s ease, box-shadow 0.25s ease;
+        }
+
+        .app-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 24px rgba(0,0,0,0.18);
+        }
+
+        .app-img-link {
+            display: block;
+            position: relative;
+            overflow: hidden;
+            height: 220px;
+            background-color: #2b2927;
+        }
+
+        .app-img-link img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.35s ease, opacity 0.35s ease;
+        }
+
+        .app-card:hover .app-img-link img {
+            transform: scale(1.05);
+            opacity: 0.9;
+        }
+
+        .badge-click {
+            position: absolute;
+            bottom: 12px;
+            right: 12px;
+            background-color: rgba(31, 58, 82, 0.9);
+            color: #fff;
+            padding: 5px 10px;
+            font-size: 0.8em;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .app-content {
+            padding: 24px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .app-tag {
+            font-size: 0.78em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #8c7b65;
+            font-weight: bold;
+            margin-bottom: 6px;
+        }
+
+        .app-content h2 {
+            margin: 0 0 12px 0;
+            color: #1f3a52;
+            font-family: 'Georgia', serif;
+            font-size: 1.4em;
+        }
+
+        .app-content p {
+            margin: 0 0 20px 0;
+            color: #3a3632;
+            line-height: 1.6;
+            font-size: 0.96em;
+            flex: 1;
+        }
+
+        .app-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            border-top: 1px solid #e2dacb;
+            padding-top: 15px;
+        }
+
+        .btn-primary {
+            background-color: #1f3a52;
+            color: #ffffff;
+            text-decoration: none;
+            padding: 10px 16px;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 0.9em;
+            transition: background-color 0.2s;
+        }
+
+        .btn-primary:hover {
+            background-color: #2e5578;
+        }
+
+        .btn-secondary {
+            background-color: #ebe4d5;
+            color: #2b2927;
+            text-decoration: none;
+            padding: 10px 14px;
+            border-radius: 5px;
+            font-weight: 600;
+            font-size: 0.9em;
+            border: 1px solid #c9bfae;
+            transition: background-color 0.2s;
+        }
+
+        .btn-secondary:hover {
+            background-color: #dfd5c0;
+        }
+
+        footer {
+            background-color: rgba(31, 58, 82, 0.95);
+            color: #dcd3c1;
+            text-align: center;
+            padding: 16px;
+            font-size: 0.88em;
+            margin-top: 40px;
+        }
+
+        footer a {
+            color: #ffffff;
+            text-decoration: underline;
+        }
+
+        @media (max-width: 650px) {
+            header {
+                flex-direction: column-reverse;
+                align-items: flex-end;
+                gap: 12px;
+                padding: 15px 20px;
+            }
+            .repo-link {
+                align-self: flex-start;
+            }
+            .app-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <a href="https://github.com/marcopagano512-blip/didattica-webapp/" target="_blank" class="repo-link">
+            &#128193; Repository GitHub
+        </a>
+        <div class="docente-info">
+            Prof. Marco Pagano
+            <span>(Telecomunicazioni - Sistemi e Reti)</span>
+        </div>
+    </header>
+
+    <main>
+        <section class="hero-box">
+            <h1>Portafoglio Applicazioni Didattiche Interattive</h1>
+            <p>Raccolta di simulazioni, laboratori virtuali e schede interattive progettate per supportare la didattica laboratoriale, l'acquisizione dati e la comprensione dei fenomeni scientifici e tecnologici.</p>
+            <div class="citazione-fantozzi">
+                "Com'è umano lei!" — Strumenti digitali per sopravvivere alle scadenze della Megaditta scolastica senza timbrare il cartellino al volo.
+            </div>
+        </section>
+
+        <section class="app-grid">
+            
+            <!-- APP 1: FERMENTAZIONE DEL PANE -->
+            <article class="app-card">
+                <a href="https://marcopagano512-blip.github.io/didattica-webapp/fermentazionepane.html" target="_blank" class="app-img-link" title="Apri l'app Fermentazione del Pane">
+                    <img src="https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=900&q=80" alt="Pane lievitato e fermentazione">
+                    <span class="badge-click">Clicca per avviare &#8599;</span>
+                </a>
+                <div class="app-content">
+                    <div class="app-tag">Scienze &amp; Processi Biochimici</div>
+                    <h2>1. Fermentazione del Pane</h2>
+                    <p>
+                        <strong>Obiettivo didattico:</strong> Analisi guidata in passi delle trasformazioni chimiche e biologiche durante la panificazione. L'applicazione illustra l'azione degli enzimi amilasi, la fase aerobia iniziale del lievito (<em>Saccharomyces cerevisiae</em>) e la successiva fermentazione alcolica anaerobia con produzione di CO<sub>2</sub> ed etanolo, strutturata con linguaggio tecnico chiaro e accessibile.
+                    </p>
+                    <div class="app-actions">
+                        <a href="https://marcopagano512-blip.github.io/didattica-webapp/fermentazionepane.html" target="_blank" class="btn-primary">Apri WebApp</a>
+                        <a href="https://github.com/marcopagano512-blip/didattica-webapp/blob/main/fermentazionepane.html" target="_blank" class="btn-secondary">Codice su GitHub</a>
+                    </div>
+                </div>
+            </article>
+
+            <!-- APP 2: CURVA DI RISCALDAMENTO ARDUINO -->
+            <article class="app-card">
+                <a href="https://marcopagano512-blip.github.io/didattica-webapp/TempArduino.html" target="_blank" class="app-img-link" title="Apri l'app Curva di Riscaldamento con Arduino">
+                    <img src="https://images.unsplash.com/photo-1553406830-ef2513450d76?auto=format&fit=crop&w=900&q=80" alt="Scheda Arduino e sensori di temperatura">
+                    <span class="badge-click">Clicca per avviare &#8599;</span>
+                </a>
+                <div class="app-content">
+                    <div class="app-tag">Sistemi, Sensoristica &amp; Fisica</div>
+                    <h2>2. Curva di Riscaldamento (Arduino)</h2>
+                    <p>
+                        <strong>Obiettivo didattico:</strong> Acquisizione, visualizzazione e analisi grafica dell'andamento termico tramite microcontrollore Arduino e sensori di temperatura. Permette agli studenti di osservare in tempo reale i transitori termici, le soste termiche nei passaggi di stato e di collegare la programmazione embedded all'analisi sperimentale dei dati.
+                    </p>
+                    <div class="app-actions">
+                        <a href="https://marcopagano512-blip.github.io/didattica-webapp/TempArduino.html" target="_blank" class="btn-primary">Apri WebApp</a>
+                        <a href="https://github.com/marcopagano512-blip/didattica-webapp/blob/main/TempArduino.html" target="_blank" class="btn-secondary">Codice su GitHub</a>
+                    </div>
+                </div>
+            </article>
+
+        </section>
+    </main>
+
+    <footer>
+        Materiale didattico a cura del <strong>Prof. Marco Pagano</strong> &bull; Repository ufficiale: 
+        <a href="https://github.com/marcopagano512-blip/didattica-webapp/" target="_blank">github.com/marcopagano512-blip/didattica-webapp</a>
+    </footer>
+
+</body>
+</html>
